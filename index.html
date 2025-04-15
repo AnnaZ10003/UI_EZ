@@ -28,6 +28,7 @@
 <body>
   <h2>上传你的 UI 结构 JSON 文件：</h2>
   <input type="file" id="fileInput" accept=".json"><br><br>
+  <button id="loadExample">📂 加载示例结构</button><br><br>
   <label for="themeSelect">🎨 选择美化模板：</label>
   <select id="themeSelect">
     <option value="default">现代蓝白风</option>
@@ -290,6 +291,34 @@
   });
 };
 
+document.getElementById("loadExample").onclick = function () {
+      const exampleJSON = {
+        "type": "Column",
+        "children": [
+          {
+            "type": "Card",
+            "props": {
+              "children": [
+                { "type": "Image" },
+                { "type": "TextField" }
+              ]
+            }
+          },
+          { "type": "Divider" },
+          {
+            "type": "Button",
+            "props": { "label": "Click Me" }
+          }
+        ]
+      };
+      const fileInput = document.getElementById("fileInput");
+      const blob = new Blob([JSON.stringify(exampleJSON)], { type: "application/json" });
+      const file = new File([blob], "example.json");
+      const dataTransfer = new DataTransfer();
+      dataTransfer.items.add(file);
+      fileInput.files = dataTransfer.files;
+      fileInput.dispatchEvent(new Event("change"));
+    };
 
   </script>
 </body>
