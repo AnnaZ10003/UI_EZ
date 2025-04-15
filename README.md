@@ -28,7 +28,6 @@
 |----------|----------|----------|
 | ![上传结构](./screenshots/upload.png) | ![美化效果](./screenshots/preview.png) | ![生成代码](./screenshots/flutter.png) |
 
-> *如果你还没有截图文件，我可以帮你生成 placeholder 示例图放进 `screenshots/` 文件夹中～*
 
 ---
 
