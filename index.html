@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>UI结构识别Demo</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .component {
+      margin: 10px 0;
+      border-radius: 5px;
+      background: #f9f9f9;
+      padding: 10px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      border: 1px solid #ccc;
+    }
+    .style-column {
+      background: #fff;
+      padding: 5px;
+      border-radius: 5px;
+    }
+    .section-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+    }
+  </style>
+</head>
+<body>
+  <h2>上传你的 UI 结构 JSON 文件：</h2>
+  <input type="file" id="fileInput" accept=".json"><br><br>
+  <label for="themeSelect">🎨 选择美化模板：</label>
+  <select id="themeSelect">
+    <option value="default">现代蓝白风</option>
+    <option value="soft">柔和紫粉风</option>
+  </select><br><br>
+  <button id="exportBtn">📦 导出美化后的 JSON</button>
+  <button id="generateFlutterBtn">📄 生成 Flutter 代码</button>
+  <button id="copyFlutterBtn">📋 复制 Flutter 代码</button>
+  <span id="copySuccess" style="color: green; margin-left: 10px;"></span>
+
+
+  <div id="result"></div>
+  <pre id="flutterCode" style="margin-top: 20px; background: #f4f4f4; padding: 10px; white-space: pre-wrap;"></pre>
+
+  <script>
+    const themes = {
+      default: {
+        Button: {
+          backgroundColor: "#1E90FF",
+          textColor: "#ffffff",
+          borderRadius: "12px"
+        },
+        TextField: {
+          borderColor: "#999999",
+          borderRadius: "6px"
+        },
+        Card: {
+          backgroundColor: "#ffffff",
+          borderRadius: "8px",
+          boxShadow: "0 2px 5px rgba(0,0,0,0.1)",
+          padding: "16px"
+        },
+        Image: {
+          borderRadius: "8px",
+          border: "1px solid #ccc"
+        },
+        Divider: {
+          height: "1px",
+          backgroundColor: "#e0e0e0"
+        }
+      },
+      soft: {
+        Button: {
+          backgroundColor: "#FFB6C1",
+          textColor: "#6A1B9A",
+          borderRadius: "20px"
+        },
+        TextField: {
+          borderColor: "#CE93D8",
+          borderRadius: "12px"
+        },
+        Card: {
+          backgroundColor: "#FFF0F5",
+          borderRadius: "12px",
+          boxShadow: "0 2px 8px rgba(255,105,180,0.3)",
+          padding: "20px"
+        },
+        Image: {
+          borderRadius: "12px",
+          border: "2px solid #F8BBD0"
+        },
+        Divider: {
+          height: "2px",
+          backgroundColor: "#F48FB1"
+        }
+      }
+    };
+
+    let parsedJson = null;
+
+    function extractComponentsWithStyle(node, result = []) {
+      const type = node.type || "Unknown";
+      const style = (node.props && node.props.style) || {};
+      result.push({ type, style });
+
+      if (node.children) {
+        node.children.forEach(child => extractComponentsWithStyle(child, result));
+      }
+      return result;
+    }
+
+    function countByType(array) {
+      const counts = {};
+      array.forEach(item => {
+        counts[item] = (counts[item] || 0) + 1;
+      });
+      return counts;
+    }
+
+    function applyStylesToJson(node, styleTemplate) {
+      const type = node.type;
+      const template = styleTemplate[type] || {};
+      const originalStyle = (node.props && node.props.style) || {};
+      const finalStyle = { ...template, ...originalStyle };
+
+      if (!node.props) node.props = {};
+      node.props.style = finalStyle;
+
+      if (node.children) {
+        node.children.forEach(child => applyStylesToJson(child, styleTemplate));
+      }
+      return node;
+    }
+
+    function downloadJSON(obj, filename) {
+      const blob = new Blob([JSON.stringify(obj, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function jsonToFlutter(node, indent = "  ") {
+      const type = node.type;
+      const props = node.props || {};
+      const style = props.style || {};
+      let flutterCode = "";
+      const indent2 = indent + "  ";
+
+      switch (type) {
+        case "Column":
+          const children = node.children?.map(child => jsonToFlutter(child, indent2)).join(",\n") || "";
+          flutterCode = `Column(\n${indent2}children: [\n${children}\n${indent2}]\n${indent})`;
+          break;
+
+        case "Button":
+          flutterCode = `ElevatedButton(\n${indent2}onPressed: () {},\n${indent2}child: Text("${props.label || "Button"}"),\n${indent2}style: ElevatedButton.styleFrom(\n${indent2}  backgroundColor: Color(0xFF${style.backgroundColor?.replace("#", "") || "CCCCCC"}),\n${indent2}  shape: RoundedRectangleBorder(\n${indent2}    borderRadius: BorderRadius.circular(${style.borderRadius || 4})\n${indent2}  )\n${indent2})\n${indent})`;
+          break;
+
+        case "TextField":
+          flutterCode = `TextField(\n${indent2}decoration: InputDecoration(\n${indent2}  border: OutlineInputBorder(),\n${indent2})\n${indent})`;
+          break;
+
+        case "Image":
+          flutterCode = `ClipRRect(\n${indent2}borderRadius: BorderRadius.circular(${style.borderRadius || 0}),\n${indent2}child: Image.network("https://via.placeholder.com/150")\n${indent})`;
+          break;
+
+        case "Card":
+          const cardChildren = props.children?.map(child => jsonToFlutter(child, indent2)).join(",\n") || "";
+          flutterCode = `Card(\n${indent2}child: Column(\n${indent2}  children: [\n${cardChildren}\n${indent2}  ]\n${indent2})\n${indent})`;
+          break;
+
+        case "Divider":
+          flutterCode = `Divider(\n${indent2}color: Color(0xFF${style.backgroundColor?.replace("#", "") || "DDDDDD"}),\n${indent2}thickness: ${style.height || 1}\n${indent})`;
+          break;
+
+        default:
+          flutterCode = `Container()`;
+      }
+
+      return indent + flutterCode;
+    }
+
+    document.getElementById("fileInput").addEventListener("change", function (e) {
+      const file = e.target.files[0];
+      const reader = new FileReader();
+      reader.onload = function (event) {
+        const selectedTheme = document.getElementById("themeSelect").value;
+        const styleTemplate = themes[selectedTheme];
+        const json = JSON.parse(event.target.result);
+        parsedJson = json;
+        const components = extractComponentsWithStyle(json);
+        const resultDiv = document.getElementById("result");
+        resultDiv.innerHTML = "<h3>解析结果：</h3>";
+
+        const types = components.map(c => c.type);
+        const typeStats = countByType(types);
+        resultDiv.innerHTML += "<h4>组件数量统计：</h4>";
+        for (const [type, count] of Object.entries(typeStats)) {
+          resultDiv.innerHTML += `🔢 ${type}: ${count} 个<br>`;
+        }
+
+        components.forEach(({ type, style }) => {
+          const beautify = styleTemplate[type] || {};
+          const finalStyle = { ...beautify, ...style };
+          const rawStyleHTML = Object.keys(style).length > 0
+            ? Object.entries(style).map(([k, v]) => `• ${k}: ${v}`).join("<br>")
+            : "• 无样式";
+          const beautifiedStyleList = Object.entries(finalStyle)
+            .map(([k, v]) => `• ${k}: ${v}`).join("<br>");
+
+          let previewHTML = "";
+          if (type === "Button") {
+            previewHTML = `
+              <div style="margin-top: 10px;">
+                <strong>效果预览：</strong><br>
+                <button style="
+                  background-color: ${finalStyle.backgroundColor || '#ccc'};
+                  color: ${finalStyle.color || '#000'};
+                  border: none;
+                  padding: 6px 12px;
+                  border-radius: ${finalStyle.borderRadius || '4px'};
+                ">Click me</button>
+              </div>`;
+          } else if (type === "Image") {
+            previewHTML = `
+              <div style="margin-top: 10px;">
+                <strong>效果预览：</strong><br>
+                <img src="https://via.placeholder.com/150"
+                  style="
+                    width: 100px;
+                    height: 100px;
+                    border-radius: ${finalStyle.borderRadius || '0px'};
+                    border: ${finalStyle.border || 'none'};
+                  ">
+              </div>`;
+          }
+
+          const div = document.createElement("div");
+          div.className = "component";
+          div.innerHTML = `
+            <div class="style-column">
+              <div class="section-title">原始样式：<br><strong>${type}</strong></div>
+              ${rawStyleHTML}
+            </div>
+            <div class="style-column">
+              <div class="section-title">美化后样式：</div>
+              ${beautifiedStyleList}
+              ${previewHTML}
+            </div>
+          `;
+          resultDiv.appendChild(div);
+        });
+      };
+      reader.readAsText(file);
+    });
+
+    document.getElementById("exportBtn").onclick = function () {
+      const selectedTheme = document.getElementById("themeSelect").value;
+      if (!parsedJson) return alert("请先上传 JSON 文件！");
+      const styledJson = applyStylesToJson(structuredClone(parsedJson), themes[selectedTheme]);
+      downloadJSON(styledJson, "beautified_ui.json");
+    };
+
+    document.getElementById("generateFlutterBtn").onclick = function () {
+      const selectedTheme = document.getElementById("themeSelect").value;
+      if (!parsedJson) return alert("请先上传 JSON 文件！");
+      const styledJson = applyStylesToJson(structuredClone(parsedJson), themes[selectedTheme]);
+      const flutterCode = jsonToFlutter(styledJson, "  ");
+      document.getElementById("flutterCode").textContent = flutterCode;
+    };
+
+    document.getElementById("copyFlutterBtn").onclick = function () {
+  const codeBlock = document.getElementById("flutterCode");
+  const text = codeBlock.textContent;
+
+  if (!text.trim()) {
+    alert("请先生成 Flutter 代码！");
+    return;
+  }
+
+  navigator.clipboard.writeText(text).then(() => {
+    const msg = document.getElementById("copySuccess");
+    msg.textContent = "已复制到剪贴板 ✅";
+    setTimeout(() => msg.textContent = "", 2000);
+  }).catch(err => {
+    alert("复制失败：" + err);
+  });
+};
+
+
+  </script>
+</body>
+</html>
